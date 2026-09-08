@@ -1,0 +1,44 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "Auth Service DB (auth_db)",
+      "Group": "Distributed E-Commerce",
+      "Host": "localhost",
+      "Port": 5432,
+      "MaintenanceDB": "auth_db",
+      "Username": "postgres",
+      "SSLMode": "prefer",
+      "Comment": "Authentication & User Management PostgreSQL Database"
+    },
+    "2": {
+      "Name": "Product Service DB (product_db)",
+      "Group": "Distributed E-Commerce",
+      "Host": "localhost",
+      "Port": 5433,
+      "MaintenanceDB": "product_db",
+      "Username": "postgres",
+      "SSLMode": "prefer",
+      "Comment": "Product Catalog PostgreSQL Database"
+    },
+    "3": {
+      "Name": "Order Service DB (order_db)",
+      "Group": "Distributed E-Commerce",
+      "Host": "localhost",
+      "Port": 5434,
+      "MaintenanceDB": "order_db",
+      "Username": "postgres",
+      "SSLMode": "prefer",
+      "Comment": "Orders & Order Items PostgreSQL Database"
+    },
+    "4": {
+      "Name": "Payment Service DB (payment_db)",
+      "Group": "Distributed E-Commerce",
+      "Host": "localhost",
+      "Port": 5435,
+      "MaintenanceDB": "payment_db",
+      "Username": "postgres",
+      "SSLMode": "prefer",
+      "Comment": "Payments & Transaction Status PostgreSQL Database"
+    }
+  }
+}

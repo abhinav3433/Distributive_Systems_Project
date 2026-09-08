@@ -9,6 +9,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: auth_db
+    ports:
+      - "5432:5432"
     volumes:
       - postgres_auth_data:/var/lib/postgresql/data
       - ./services/auth-service/migrations/001_create_users_table.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -26,6 +28,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: product_db
+    ports:
+      - "5433:5432"
     volumes:
       - postgres_product_data:/var/lib/postgresql/data
       - ./services/product-service/migrations/001_create_products_table.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -43,6 +47,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: order_db
+    ports:
+      - "5434:5432"
     volumes:
       - postgres_order_data:/var/lib/postgresql/data
       - ./services/order-service/migrations/001_create_orders_table.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -60,6 +66,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: payment_db
+    ports:
+      - "5435:5432"
     volumes:
       - postgres_payment_data:/var/lib/postgresql/data
       - ./services/payment-service/migrations/001_create_payments_table.sql:/docker-entrypoint-initdb.d/init.sql:ro
