@@ -79,6 +79,34 @@ func (r *PostgresOrderRepository) CreateOrderWithItems(ctx context.Context, orde
 		}
 	}
 
+	// Insert shipping address snapshot atomically within the transaction
+	if order.Address != nil {
+		addrQuery := `
+			INSERT INTO order_shipping_addresses (
+				order_id, recipient_name, phone_number, address_line1, address_line2,
+				city, state, postal_code, country, created_at
+			)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+			RETURNING id, created_at
+		`
+		order.Address.OrderID = order.ID
+		err = tx.QueryRowContext(ctx, addrQuery,
+			order.ID,
+			order.Address.RecipientName,
+			order.Address.PhoneNumber,
+			order.Address.AddressLine1,
+			order.Address.AddressLine2,
+			order.Address.City,
+			order.Address.State,
+			order.Address.PostalCode,
+			order.Address.Country,
+		).Scan(&order.Address.ID, &order.Address.CreatedAt)
+		if err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("failed to insert order shipping address: %w", err)
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
@@ -124,6 +152,28 @@ func (r *PostgresOrderRepository) GetOrderByID(ctx context.Context, id int) (*mo
 		order.Items = append(order.Items, item)
 	}
 
+	// Fetch shipping address snapshot if exists (safe for historical orders without address)
+	addrQuery := `
+		SELECT id, order_id, recipient_name, phone_number, address_line1,
+		       COALESCE(address_line2, ''), city, state, postal_code, country, created_at
+		FROM order_shipping_addresses
+		WHERE order_id = $1
+	`
+	var addr model.ShippingAddress
+	err = r.db.QueryRowContext(ctx, addrQuery, id).Scan(
+		&addr.ID, &addr.OrderID, &addr.RecipientName, &addr.PhoneNumber,
+		&addr.AddressLine1, &addr.AddressLine2, &addr.City, &addr.State,
+		&addr.PostalCode, &addr.Country, &addr.CreatedAt,
+	)
+	if err == nil {
+		order.Address = &addr
+		if order.ShippingAddress == "" {
+			order.ShippingAddress = addr.FormatSummary()
+		}
+	} else if err != sql.ErrNoRows {
+		return nil, fmt.Errorf("failed to fetch order shipping address: %w", err)
+	}
+
 	return order, nil
 }
 
@@ -150,7 +200,7 @@ func (r *PostgresOrderRepository) GetOrdersByUserID(ctx context.Context, userID 
 		orders = append(orders, o)
 	}
 
-	// Fetch items for each order
+	// Fetch items and shipping address for each order
 	for i := range orders {
 		itemsQuery := `
 			SELECT id, order_id, product_id, quantity, price
@@ -169,6 +219,24 @@ func (r *PostgresOrderRepository) GetOrdersByUserID(ctx context.Context, userID 
 			}
 		}
 		itemRows.Close()
+
+		addrQuery := `
+			SELECT id, order_id, recipient_name, phone_number, address_line1,
+			       COALESCE(address_line2, ''), city, state, postal_code, country, created_at
+			FROM order_shipping_addresses
+			WHERE order_id = $1
+		`
+		var addr model.ShippingAddress
+		if err := r.db.QueryRowContext(ctx, addrQuery, orders[i].ID).Scan(
+			&addr.ID, &addr.OrderID, &addr.RecipientName, &addr.PhoneNumber,
+			&addr.AddressLine1, &addr.AddressLine2, &addr.City, &addr.State,
+			&addr.PostalCode, &addr.Country, &addr.CreatedAt,
+		); err == nil {
+			orders[i].Address = &addr
+			if orders[i].ShippingAddress == "" {
+				orders[i].ShippingAddress = addr.FormatSummary()
+			}
+		}
 	}
 
 	return orders, nil
@@ -176,25 +244,34 @@ func (r *PostgresOrderRepository) GetOrdersByUserID(ctx context.Context, userID 
 
 // In-memory mock repository for tests and local execution
 type MockOrderRepository struct {
-	mu         sync.RWMutex
-	orders     map[int]*model.Order
-	orderItems map[int][]model.OrderItem
-	orderSeq   int
-	itemSeq    int
+	mu             sync.RWMutex
+	orders         map[int]*model.Order
+	orderItems     map[int][]model.OrderItem
+	orderAddresses map[int]*model.ShippingAddress
+	orderSeq       int
+	itemSeq        int
+	addressSeq     int
+	FailOnAddress  bool
 }
 
 func NewMockOrderRepository() *MockOrderRepository {
 	return &MockOrderRepository{
-		orders:     make(map[int]*model.Order),
-		orderItems: make(map[int][]model.OrderItem),
-		orderSeq:   1,
-		itemSeq:    1,
+		orders:         make(map[int]*model.Order),
+		orderItems:     make(map[int][]model.OrderItem),
+		orderAddresses: make(map[int]*model.ShippingAddress),
+		orderSeq:       1,
+		itemSeq:        1,
+		addressSeq:     1,
 	}
 }
 
 func (m *MockOrderRepository) CreateOrderWithItems(ctx context.Context, order *model.Order, items []model.OrderItem) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	if m.FailOnAddress && order.Address != nil {
+		return errors.New("simulated shipping address insert failure")
+	}
 
 	order.ID = m.orderSeq
 	m.orderSeq++
@@ -211,6 +288,16 @@ func (m *MockOrderRepository) CreateOrderWithItems(ctx context.Context, order *m
 	}
 
 	order.Items = savedItems
+
+	if order.Address != nil {
+		addrCopy := *order.Address
+		addrCopy.ID = m.addressSeq
+		m.addressSeq++
+		addrCopy.OrderID = order.ID
+		addrCopy.CreatedAt = now
+		m.orderAddresses[order.ID] = &addrCopy
+		order.Address = &addrCopy
+	}
 
 	cp := *order
 	m.orders[order.ID] = &cp
@@ -229,6 +316,13 @@ func (m *MockOrderRepository) GetOrderByID(ctx context.Context, id int) (*model.
 
 	cp := *order
 	cp.Items = m.orderItems[id]
+	if addr, hasAddr := m.orderAddresses[id]; hasAddr {
+		addrCopy := *addr
+		cp.Address = &addrCopy
+		if cp.ShippingAddress == "" {
+			cp.ShippingAddress = addrCopy.FormatSummary()
+		}
+	}
 	return &cp, nil
 }
 
@@ -241,6 +335,13 @@ func (m *MockOrderRepository) GetOrdersByUserID(ctx context.Context, userID int)
 		if o.UserID == userID {
 			cp := *o
 			cp.Items = m.orderItems[o.ID]
+			if addr, hasAddr := m.orderAddresses[o.ID]; hasAddr {
+				addrCopy := *addr
+				cp.Address = &addrCopy
+				if cp.ShippingAddress == "" {
+					cp.ShippingAddress = addrCopy.FormatSummary()
+				}
+			}
 			result = append(result, cp)
 		}
 	}

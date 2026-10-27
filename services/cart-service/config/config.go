@@ -10,6 +10,7 @@ type Config struct {
 	RedisPass string
 	RedisDB   int
 	Port      string
+	GRPCPort  string
 }
 
 func LoadConfig() *Config {
@@ -24,6 +25,7 @@ func LoadConfig() *Config {
 		RedisPass: getEnv("REDIS_PASSWORD", ""),
 		RedisDB:   db,
 		Port:      getEnv("PORT", "8083"),
+		GRPCPort:  getEnv("GRPC_PORT", "9093"),
 	}
 }
 

@@ -11,21 +11,25 @@ type Config struct {
 	DBUser            string
 	DBPassword        string
 	DBName            string
-	ProductServiceURL string
-	RabbitMQURL       string
-	Port              string
+	ProductServiceURL      string
+	ProductServiceGRPCAddr string
+	RabbitMQURL            string
+	Port                   string
+	GRPCPort               string
 }
 
 func LoadConfig() *Config {
 	return &Config{
-		DBHost:            getEnv("DB_HOST", "localhost"),
-		DBPort:            getEnv("DB_PORT", "5432"),
-		DBUser:            getEnv("DB_USER", "postgres"),
-		DBPassword:        getEnv("DB_PASSWORD", "password"),
-		DBName:            getEnv("DB_NAME", "order_db"),
-		ProductServiceURL: getEnv("PRODUCT_SERVICE_URL", "http://localhost:8082"),
-		RabbitMQURL:       getEnv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/"),
-		Port:              getEnv("PORT", "8084"),
+		DBHost:                 getEnv("DB_HOST", "localhost"),
+		DBPort:                 getEnv("DB_PORT", "5432"),
+		DBUser:                 getEnv("DB_USER", "postgres"),
+		DBPassword:             getEnv("DB_PASSWORD", "password"),
+		DBName:                 getEnv("DB_NAME", "order_db"),
+		ProductServiceURL:      getEnv("PRODUCT_SERVICE_URL", "http://localhost:8082"),
+		ProductServiceGRPCAddr: getEnv("PRODUCT_SERVICE_GRPC_ADDR", "localhost:9092"),
+		RabbitMQURL:            getEnv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/"),
+		Port:                   getEnv("PORT", "8084"),
+		GRPCPort:               getEnv("GRPC_PORT", "9094"),
 	}
 }
 

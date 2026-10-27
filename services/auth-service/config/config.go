@@ -13,6 +13,7 @@ type Config struct {
 	DBName     string
 	JWTSecret  string
 	Port       string
+	GRPCPort   string
 }
 
 func LoadConfig() *Config {
@@ -24,6 +25,7 @@ func LoadConfig() *Config {
 		DBName:     getEnv("DB_NAME", "auth_db"),
 		JWTSecret:  getEnv("JWT_SECRET", "super-secret-jwt-key"),
 		Port:       getEnv("PORT", "8081"),
+		GRPCPort:   getEnv("GRPC_PORT", "9091"),
 	}
 }
 

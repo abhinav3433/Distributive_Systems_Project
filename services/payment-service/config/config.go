@@ -13,6 +13,7 @@ type Config struct {
 	DBName      string
 	RabbitMQURL string
 	Port        string
+	GRPCPort    string
 }
 
 func LoadConfig() *Config {
@@ -24,6 +25,7 @@ func LoadConfig() *Config {
 		DBName:      getEnv("DB_NAME", "payment_db"),
 		RabbitMQURL: getEnv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/"),
 		Port:        getEnv("PORT", "8085"),
+		GRPCPort:    getEnv("GRPC_PORT", "9095"),
 	}
 }
 

@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package auth.v1;
+
+option go_package = "proto/auth/v1;authv1";
+
+service AuthService {
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  rpc Login(LoginRequest) returns (LoginResponse);
+  rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+  rpc GetMe(GetMeRequest) returns (GetMeResponse);
+}
+
+message User {
+  int64 id = 1;
+  string name = 2;
+  string email = 3;
+  string created_at = 4;
+  string updated_at = 5;
+}
+
+message RegisterRequest {
+  string name = 1;
+  string email = 2;
+  string password = 3;
+}
+
+message RegisterResponse {
+  int64 id = 1;
+  string name = 2;
+  string email = 3;
+  string created_at = 4;
+}
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message LoginResponse {
+  string token = 1;
+  User user = 2;
+}
+
+message ValidateTokenRequest {
+  string token = 1;
+}
+
+message ValidateTokenResponse {
+  bool valid = 1;
+  int64 user_id = 2;
+  string email = 3;
+  string name = 4;
+}
+
+message GetMeRequest {
+  int64 user_id = 1;
+}
+
+message GetMeResponse {
+  User user = 1;
+}

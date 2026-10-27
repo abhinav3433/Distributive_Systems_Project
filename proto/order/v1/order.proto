@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+package order.v1;
+
+option go_package = "proto/order/v1;orderv1";
+
+service OrderService {
+  rpc CreateOrder(CreateOrderRequest) returns (CreateOrderResponse);
+  rpc GetOrder(GetOrderRequest) returns (GetOrderResponse);
+  rpc ListOrders(ListOrdersRequest) returns (ListOrdersResponse);
+}
+
+message OrderItemInput {
+  int64 product_id = 1;
+  int32 quantity = 2;
+  string product_name = 3;
+  double price = 4;
+}
+
+message OrderItem {
+  int64 id = 1;
+  int64 order_id = 2;
+  int64 product_id = 3;
+  string product_name = 4;
+  int32 quantity = 5;
+  double price = 6;
+}
+
+message ShippingAddress {
+  int64 id = 1;
+  int64 order_id = 2;
+  string recipient_name = 3;
+  string phone_number = 4;
+  string address_line1 = 5;
+  string address_line2 = 6;
+  string city = 7;
+  string state = 8;
+  string postal_code = 9;
+  string country = 10;
+  string created_at = 11;
+}
+
+message Order {
+  int64 id = 1;
+  int64 user_id = 2;
+  string status = 3;
+  double total_amount = 4;
+  string shipping_address = 5;
+  repeated OrderItem items = 6;
+  string created_at = 7;
+  string updated_at = 8;
+  ShippingAddress address = 9;
+}
+
+message CreateOrderRequest {
+  int64 user_id = 1;
+  repeated OrderItemInput items = 2;
+  string shipping_address = 3;
+  ShippingAddress address = 4;
+}
+
+message CreateOrderResponse {
+  Order order = 1;
+}
+
+message GetOrderRequest {
+  int64 id = 1;
+}
+
+message GetOrderResponse {
+  Order order = 1;
+}
+
+message ListOrdersRequest {
+  int64 user_id = 1;
+}
+
+message ListOrdersResponse {
+  repeated Order orders = 1;
+}

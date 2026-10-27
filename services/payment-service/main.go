@@ -1,18 +1,29 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log"
+	"net"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"payment-service/config"
+	paymentgrpc "payment-service/grpc"
 	"payment-service/handler"
 	"payment-service/messaging"
 	"payment-service/repository"
 	"payment-service/service"
+	paymentv1 "proto/payment/v1"
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
+	googlegrpc "google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
 func initDB(dsn string) (*sql.DB, error) {
@@ -88,16 +99,74 @@ func main() {
 	// 4. Initialize REST API Handlers
 	h := handler.NewPaymentHandler(svc)
 
+	// 5. Initialize and start Payment Service gRPC Server
+	grpcServer := googlegrpc.NewServer()
+	paymentGRPCServer := paymentgrpc.NewPaymentGRPCServer(svc)
+	paymentv1.RegisterPaymentServiceServer(grpcServer, paymentGRPCServer)
+
+	// Register standard gRPC health service
+	healthServer := health.NewServer()
+	healthServer.SetServingStatus("payment.v1.PaymentService", grpc_health_v1.HealthCheckResponse_SERVING)
+	grpc_health_v1.RegisterHealthServer(grpcServer, healthServer)
+
+	lis, err := net.Listen("tcp", ":"+cfg.GRPCPort)
+	if err != nil {
+		log.Fatalf("Failed to listen on gRPC port %s: %v", cfg.GRPCPort, err)
+	}
+
+	go func() {
+		log.Printf("Payment Service gRPC server listening on port %s...", cfg.GRPCPort)
+		if err := grpcServer.Serve(lis); err != nil {
+			log.Printf("Payment Service gRPC server error: %v", err)
+		}
+	}()
+
+	// 6. HTTP Server (REST + Health)
 	router := gin.Default()
+
+	// Root endpoint (prevents 404 when tested directly)
+	router.GET("/", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"service":   "payment-service",
+			"status":    "UP",
+			"http_port": cfg.Port,
+			"grpc_port": cfg.GRPCPort,
+			"endpoints": []string{"/health", "/payments", "/payments/:orderId"},
+		})
+	})
 
 	// REST Endpoints (Preserved as requested)
 	router.GET("/health", h.HealthCheck)
 	router.GET("/payments/health", h.HealthCheck)
+	router.GET("/api/payments/health", h.HealthCheck)
 	router.POST("/payments", h.ProcessPayment)
+	router.POST("/api/payments", h.ProcessPayment)
 	router.GET("/payments/:orderId", h.GetPaymentByOrderID)
+	router.GET("/api/payments/:orderId", h.GetPaymentByOrderID)
 
-	log.Printf("Payment Service starting on port %s...", cfg.Port)
-	if err := router.Run(":" + cfg.Port); err != nil {
-		log.Fatalf("Payment Service failed to start: %v", err)
+	httpServer := &http.Server{
+		Addr:    ":" + cfg.Port,
+		Handler: router,
 	}
+
+	go func() {
+		log.Printf("Payment Service HTTP server listening on port %s...", cfg.Port)
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Payment Service HTTP server failed: %v", err)
+		}
+	}()
+
+	// Graceful Shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("Shutting down Payment Service...")
+
+	grpcServer.GracefulStop()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := httpServer.Shutdown(ctx); err != nil {
+		log.Printf("HTTP server forced to shutdown: %v", err)
+	}
+	log.Println("Payment Service gracefully stopped.")
 }

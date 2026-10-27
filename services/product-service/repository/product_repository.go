@@ -148,6 +148,22 @@ func (m *MockProductRepository) seedData() {
 		{"OctaTab 11 Tablet", "11-inch tablet with stylus support and all-day battery life", 499.00, 30, "Electronics"},
 		{"Mirrorless 4K Camera", "Professional digital camera with 24MP sensor and 4K video recording", 849.99, 10, "Photography"},
 		{"NextGen Gaming Console 1TB", "Ultra-fast SSD gaming console supporting up to 120 FPS output", 499.99, 20, "Gaming"},
+		{"SlimBook Air 13\"", "Ultra-lightweight laptop with M-series silicon and 18-hour battery", 1099.00, 20, "Electronics"},
+		{"DeskStation Mini PC", "Compact desktop computer with 32GB RAM and dual 4K display output", 749.50, 18, "Electronics"},
+		{"True Wireless Pro Earbuds", "In-ear buds with spatial audio, transparency mode, and wireless charging case", 159.99, 85, "Audio"},
+		{"Hi-Fi Studio Monitor Speakers", "Pair of 5-inch powered desktop reference monitors for precision audio", 299.00, 22, "Audio"},
+		{"Rugged Waterproof Bluetooth Speaker", "360-degree portable outdoor speaker with 24-hour battery and deep bass", 79.99, 70, "Audio"},
+		{"65W GaN USB-C Fast Charger", "Ultra-compact 3-port wall charger for laptops, tablets, and phones", 39.99, 150, "Accessories"},
+		{"Braided Thunderbolt 4 Cable 2m", "40Gbps high-speed data transfer and 100W power delivery cable", 29.50, 200, "Accessories"},
+		{"Ergonomic Aluminum Laptop Stand", "Adjustable height cooling stand crafted from anodized aerospace aluminum", 45.00, 65, "Accessories"},
+		{"Active Fitness Tracker Band", "Lightweight waterproof fitness band with sleep tracking and SpO2 monitor", 59.99, 90, "Wearables"},
+		{"GPS Adventure Smartwatch", "Rugged outdoor multi-sport watch with topographic maps and solar charging", 349.00, 25, "Wearables"},
+		{"Professional Carbon Fiber Tripod", "Lightweight 65-inch camera tripod with 360-degree fluid ball head", 139.99, 35, "Photography"},
+		{"50mm f/1.8 Prime Portrait Lens", "Fast aperture portrait lens with beautiful bokeh and silent autofocus", 219.00, 28, "Photography"},
+		{"Studio Bi-Color LED Ring Light", "18-inch dimmable ring light kit with phone holder and light stand", 69.99, 55, "Photography"},
+		{"Wireless Pro Game Controller", "Ergonomic wireless controller with hall-effect triggers and rear paddles", 69.99, 75, "Gaming"},
+		{"7.1 Surround Gaming Headset", "Immersive headset with detachable noise-cancelling boom mic and memory foam", 89.99, 60, "Gaming"},
+		{"RGB Extended Gaming Mousepad", "Micro-textured waterproof cloth gaming mat with 14 RGB lighting modes", 24.99, 110, "Gaming"},
 	}
 
 	for _, s := range seeds {

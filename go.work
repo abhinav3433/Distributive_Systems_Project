@@ -1,6 +1,7 @@
 go 1.26.4
 
 use (
+	./proto
 	./services/api-gateway
 	./services/auth-service
 	./services/cart-service

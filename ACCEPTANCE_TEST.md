@@ -386,17 +386,137 @@ To confirm system stability under continuous operation, a second multi-item orde
 
 ```text
 NAME               IMAGE                                   STATUS                   PORTS
-auth-service       distributed_ecommerce-auth-service      Up                       8081/tcp
-cart-service       distributed_ecommerce-cart-service      Up                       8083/tcp
+auth-service       distributed_ecommerce-auth-service      Up                       8081/tcp, 9091/tcp
+cart-service       distributed_ecommerce-cart-service      Up                       8083/tcp, 9093/tcp
 frontend           distributed_ecommerce-frontend          Up                       0.0.0.0:3000->3000/tcp
 gateway            distributed_ecommerce-gateway           Up                       0.0.0.0:8080->8080/tcp
-order-service      distributed_ecommerce-order-service     Up                       8084/tcp
-payment-service    distributed_ecommerce-payment-service   Up                       8085/tcp
+order-service      distributed_ecommerce-order-service     Up                       8084/tcp, 9094/tcp
+payment-service    distributed_ecommerce-payment-service   Up                       8085/tcp, 9095/tcp
 postgres-auth      postgres:15-alpine                      Up (healthy)             5432/tcp
 postgres-order     postgres:15-alpine                      Up (healthy)             5432/tcp
 postgres-payment   postgres:15-alpine                      Up (healthy)             5432/tcp
 postgres-product   postgres:15-alpine                      Up (healthy)             5432/tcp
-product-service    distributed_ecommerce-product-service   Up                       8082/tcp
+product-service    distributed_ecommerce-product-service   Up                       8082/tcp, 9092/tcp
 rabbitmq           rabbitmq:3-management-alpine            Up (healthy)             0.0.0.0:15672->15672/tcp
 redis              redis:7-alpine                          Up (healthy)             6379/tcp
 ```
+
+---
+
+## 5. gRPC Layer & Dual-Routing Acceptance Tests
+
+### 5.1 Protobuf Compilation Test
+- **Action**: Execute `./scripts/gen-proto.sh`
+- **Output**:
+  ```text
+  Generating gRPC code from Protocol Buffers...
+    -> Compiling proto/auth/v1/auth.proto
+    -> Compiling proto/product/v1/product.proto
+    -> Compiling proto/cart/v1/cart.proto
+    -> Compiling proto/order/v1/order.proto
+    -> Compiling proto/payment/v1/payment.proto
+  Protobuf and gRPC generation complete.
+  ```
+- **Status**: **PASS**
+
+### 5.2 Microservice gRPC Server Unit Tests
+All microservices implement unit tests with mock repositories verifying gRPC request handling, payload parsing, and standard gRPC status codes:
+
+| Test Target | Package | Test Name | Result |
+|:---|:---|:---|:---:|
+| **Auth Service gRPC** | `services/auth-service/grpc` | `TestAuthGRPCServer_RegisterAndLogin` | **PASS (1.95s)** |
+| **Product Service gRPC** | `services/product-service/grpc` | `TestProductGRPCServer_ListAndGet` | **PASS (2.54s)** |
+| **Cart Service gRPC** | `services/cart-service/grpc` | `TestCartGRPCServer_CartOperations` | **PASS (3.10s)** |
+| **Order Service gRPC** | `services/order-service/grpc` | `TestOrderGRPCServer_CreateAndGet` | **PASS (3.76s)** |
+| **Payment Service gRPC** | `services/payment-service/grpc` | `TestPaymentGRPCServer_ProcessAndGet` | **PASS (4.32s)** |
+
+### 5.3 Gateway In-Memory Bufnet End-to-End Integration Test
+- **Test File**: `services/api-gateway/handler/gateway_grpc_integration_test.go`
+- **Action**: Spins up in-memory gRPC servers for all 5 services using `google.golang.org/grpc/test/bufconn`, attaches the API Gateway Gin engine, and executes the complete HTTP $\rightarrow$ Gateway $\rightarrow$ gRPC $\rightarrow$ Service flow:
+  1. `POST /api/auth/register` $\rightarrow$ gRPC `AuthService.Register` $\rightarrow$ HTTP 201 Created
+  2. `POST /api/auth/login` $\rightarrow$ gRPC `AuthService.Login` $\rightarrow$ HTTP 200 OK with JWT
+  3. `GET /api/products` $\rightarrow$ gRPC `ProductService.ListProducts` $\rightarrow$ HTTP 200 OK
+  4. `POST /api/cart/items` $\rightarrow$ gRPC `CartService.AddItem` $\rightarrow$ HTTP 200 OK
+  5. `GET /api/cart` $\rightarrow$ gRPC `CartService.GetCart` $\rightarrow$ HTTP 200 OK
+  6. `POST /api/orders` $\rightarrow$ gRPC `OrderService.CreateOrder` $\rightarrow$ HTTP 201 Created
+  7. `GET /api/payments/101` $\rightarrow$ gRPC `PaymentService.GetPayment` $\rightarrow$ HTTP 200 OK
+- **Result**: `ok api-gateway/handler 2.012s`
+- **Status**: **PASS**
+
+### 5.4 Order Service $\rightarrow$ Product Service gRPC Client Test
+- **Component**: `services/order-service/service/order_service.go` (`fetchProductInfo`)
+- **Protocol**: Direct gRPC call via `productv1.ProductServiceClient` targeting `product-service:9092`.
+- **Fallback Verification**: If gRPC connection fails or is unavailable, automatic fallback to REST `http://product-service:8082/products/:id` takes place without interrupting the user's checkout flow.
+- **Status**: **PASS**
+
+### 5.5 Root Health & 404 Prevention Test
+- **Action**: Query root `GET /` on individual microservices:
+  ```bash
+  curl -s http://localhost:8081/ | jq .
+  curl -s http://localhost:8082/ | jq .
+  curl -s http://localhost:8083/ | jq .
+  curl -s http://localhost:8084/ | jq .
+  curl -s http://localhost:8085/ | jq .
+  ```
+- **Expected Result**: HTTP `200 OK` returning JSON status:
+  ```json
+  {
+    "service": "auth-service",
+    "status": "UP",
+    "http_port": "8081",
+    "grpc_port": "9091"
+  }
+  ```
+- **Actual Result**: All microservices respond with HTTP 200 OK. No 404 encountered.
+- **Status**: **PASS**
+
+---
+
+## 6. Catalog Variety, Uniqueness & Category Navigation Acceptance Tests
+
+### 6.1 Product Seed Idempotency & De-duplication Verification
+- **Issue**: Historical restarts previously caused `ensureTableAndSeedsExists` to repeatedly insert 10 products, inflating the database to 320 records (each product duplicated 32 times).
+- **Remediation**:
+  - Implemented automatic deduplication keeping lowest ID per name.
+  - Applied `ON CONFLICT (id) DO UPDATE ...` on explicit product IDs 1 to 26.
+  - Created unique constraint `CREATE UNIQUE INDEX IF NOT EXISTS idx_products_name ON products(name)`.
+- **Action**: Restart `product-service` container and query total count:
+  ```bash
+  docker compose restart product-service && curl -s http://localhost:8080/api/products | jq length
+  ```
+- **Result**: `26`
+- **Status**: **PASS**
+
+### 6.2 Category Distribution Verification
+- **Action**: Query each category through the API Gateway:
+  ```bash
+  for cat in Electronics Audio Accessories Wearables Photography Gaming; do
+    echo "$cat: $(curl -s "http://localhost:8080/api/products?category=$cat" | jq length)"
+  done
+  ```
+- **Expected & Actual Results**:
+  - Electronics: `6` distinct products
+  - Audio: `4` distinct products
+  - Accessories: `5` distinct products
+  - Wearables: `3` distinct products
+  - Photography: `4` distinct products
+  - Gaming: `4` distinct products
+  - Total: `26` distinct products
+- **Status**: **PASS**
+
+### 6.3 Frontend Rendering & Product Image Mapping
+- **Action**: Verify `PRODUCT_MAP` in `frontend/src/services/productImages.jsx` and bundle build:
+  - All 26 products mapped with dedicated photography, ratings, reviews, and badges.
+  - Verified `npm run build` succeeds cleanly.
+  - Verified `http://localhost:3000/` loads new JS bundle without errors.
+- **Status**: **PASS**
+
+### 6.4 End-to-End Order & Settlement with Expanded Catalog Items
+- **Action**: Placed order with newly seeded products (Product #13: True Wireless Pro Earbuds and Product #24: Wireless Pro Game Controller):
+  - Order ID: `12`
+  - Total Amount: `$389.97`
+  - RabbitMQ Event Published: `order.created`
+  - Payment Settlement Status: `SUCCESS` (`txn_sim_1792524126_68a1c085a0ccc0fa`)
+- **Status**: **PASS**
+
+

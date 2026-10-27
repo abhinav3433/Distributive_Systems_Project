@@ -108,11 +108,28 @@ export const api = {
     }),
 
   // 4. Order Service via Gateway
-  createOrder: (items, shippingAddress) =>
-    request('/api/orders', {
+  createOrder: (items, addressData) => {
+    const payload = { items };
+    if (typeof addressData === 'string') {
+      payload.shipping_address = addressData;
+    } else if (addressData && typeof addressData === 'object') {
+      payload.address = addressData;
+      const summary = [
+        addressData.recipient_name,
+        addressData.address_line1,
+        addressData.address_line2,
+        [addressData.city, addressData.state, addressData.postal_code].filter(Boolean).join(', '),
+        addressData.country,
+      ]
+        .filter(Boolean)
+        .join(', ');
+      payload.shipping_address = summary;
+    }
+    return request('/api/orders', {
       method: 'POST',
-      body: JSON.stringify({ items, shipping_address: shippingAddress }),
-    }),
+      body: JSON.stringify(payload),
+    });
+  },
   getOrders: () => request('/api/orders'),
   getOrder: (id) => request(`/api/orders/${id}`),
 

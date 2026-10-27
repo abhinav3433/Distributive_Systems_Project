@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"product-service/model"
 	"product-service/repository"
@@ -33,6 +34,19 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve products: " + err.Error()})
 		return
 	}
+
+	category := strings.TrimSpace(strings.ToLower(c.Query("category")))
+	if category != "" && category != "all" {
+		var filtered []model.Product
+		for _, p := range products {
+			if strings.TrimSpace(strings.ToLower(p.Category)) == category {
+				filtered = append(filtered, p)
+			}
+		}
+		c.JSON(http.StatusOK, filtered)
+		return
+	}
+
 	c.JSON(http.StatusOK, products)
 }
 
